@@ -1,40 +1,47 @@
-import type { NextPage } from 'next'
-import { useState } from 'react'
-import styles from '../styles/Home.module.css'
-import AddressForm from '../components/AddressForm'
-import * as Web3 from '@solana/web3.js'
+import { useEffect } from 'react';
+import * as Web3 from '@solana/web3.js';
+import * as fs from 'fs';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const Home: NextPage = () => {
-  const [balance, setBalance] = useState(0)
-  const [address, setAddress] = useState('')
+async function initializeKeypair(connection: Web3.Connection): Promise<Web3.Keypair> {
+  if (!process.env.PRIVATE_KEY) {
+    console.log('Generating new keypair... 🗝️');
+    const signer = Web3.Keypair.generate();
 
-  const addressSubmittedHandler = (address: string) => {
-    try {
-      setAddress(address)
-      const key = new Web3.PublicKey(address)
-      const connection = new Web3.Connection(Web3.clusterApiUrl('devnet'))
-      connection.getBalance(key).then(balance => {
-        setBalance(balance / Web3.LAMPORTS_PER_SOL)
-      })
-    } catch (error) {
-      setAddress('')
-      setBalance(0)
-      alert(error)
-    }
+    console.log('Creating .env file');
+    fs.writeFileSync('.env', `PRIVATE_KEY=[${signer.secretKey.toString()}]`);
+
+    return signer;
   }
 
-  return (
-    <div className={styles.App}>
-      <header className={styles.AppHeader}>
-        <p>
-          Start Your Solana Journey
-        </p>
-        <AddressForm handler={addressSubmittedHandler} />
-        <p>{`Address: ${address}`}</p>
-        <p>{`Balance: ${balance} SOL`}</p>
-      </header>
-    </div>
-  )
+  const secret = JSON.parse(process.env.PRIVATE_KEY ?? '') as number[];
+  const secretKey = Uint8Array.from(secret);
+  const keypairFromSecret = Web3.Keypair.fromSecretKey(secretKey);
+  return keypairFromSecret;
 }
 
-export default Home
+async function main() {
+  const connection = new Web3.Connection(Web3.clusterApiUrl('devnet'));
+  const signer = await initializeKeypair(connection);
+
+  console.log("Public key:", signer.publicKey.toBase58());
+}
+
+const Home = () => {
+  useEffect(() => {
+    main()
+      .then(() => {
+        console.log('Finished successfully');
+        process.exit(0);
+      })
+      .catch((error) => {
+        console.log(error);
+        process.exit(1);
+      });
+  }, []);
+
+  return null;
+};
+
+export default Home;
